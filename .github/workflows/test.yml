@@ -1,0 +1,107 @@
+name: Backend Integration Tests
+
+on:
+  push:
+    branches: [main, master, develop]
+    paths:
+      - 'backend/**'
+      - '.github/workflows/test.yml'
+  pull_request:
+    branches: [main, master, develop]
+    paths:
+      - 'backend/**'
+      - '.github/workflows/test.yml'
+  workflow_dispatch:
+
+jobs:
+  backend-tests:
+    name: Backend Vitest Suite
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        node-version: [20.x]
+
+    defaults:
+      run:
+        working-directory: backend
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: 'npm'
+          cache-dependency-path: backend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Verify .env.test exists (otherwise create minimal)
+        run: |
+          if [ ! -f .env.test ]; then
+            cat > .env.test <<EOF
+          DATABASE_URL="file:./tests/test-data.db"
+          JWT_SECRET="ci-test-jwt-secret-key-$(date +%s)-${RANDOM}"
+          JWT_ACCESS_EXPIRES="15m"
+          JWT_REFRESH_EXPIRES_DAYS="7"
+          COOKIE_SECURE="false"
+          LOG_LEVEL="error"
+          PORT="9999"
+          EOF
+          fi
+          cat .env.test
+
+      - name: Generate test Prisma Client
+        run: npm run test:db:generate
+
+      - name: Push test database schema
+        run: npm run test:db:push
+
+      - name: Run integration tests with JUnit reporter
+        run: npm run test:ci
+        env:
+          NODE_ENV: test
+          CI: true
+
+      - name: Run coverage
+        if: success() || failure()
+        run: npx vitest run --coverage --reporter=verbose
+        env:
+          NODE_ENV: test
+          CI: true
+
+      - name: Upload JUnit test report
+        if: success() || failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-junit-report
+          path: backend/test-results.xml
+          if-no-files-found: ignore
+
+      - name: Upload coverage report
+        if: success() || failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-coverage-report
+          path: |
+            backend/coverage/
+          if-no-files-found: ignore
+
+      - name: Print coverage summary
+        if: success()
+        run: |
+          echo "=== Coverage Summary ==="
+          if [ -f coverage/coverage-summary.json ]; then
+            node -e "
+              const s = require('./coverage/coverage-summary.json').total;
+              const pct = (k) => s[k].pct;
+              console.log('Lines:   ' + pct('lines') + '%');
+              console.log('Functions: ' + pct('functions') + '%');
+              console.log('Statements: ' + pct('statements') + '%');
+              console.log('Branches:  ' + pct('branches') + '%');
+            "
+          fi

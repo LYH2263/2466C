@@ -1,7 +1,7 @@
 import { Router, Request } from 'express';
 import bcrypt from 'bcrypt';
 import { z } from 'zod';
-import { prisma } from '../index.js';
+import { getPrisma } from '../prisma.js';
 import crypto from 'crypto';
 import { requireAuth, generateAccessToken } from '../middleware/auth.js';
 import { config } from '../config.js';
@@ -29,6 +29,7 @@ function hashToken(token: string) {
 }
 
 router.post('/register', asyncHandler(async (req, res) => {
+  const prisma = getPrisma();
   const { email, password } = registerSchema.parse(req.body);
 
   const existingUser = await prisma.user.findUnique({
@@ -62,6 +63,7 @@ router.post('/register', asyncHandler(async (req, res) => {
 }));
 
 router.post('/login', asyncHandler(async (req, res) => {
+  const prisma = getPrisma();
   const { email, password } = loginSchema.parse(req.body);
 
   const user = await prisma.user.findUnique({
@@ -141,6 +143,7 @@ router.post('/login', asyncHandler(async (req, res) => {
 }));
 
 router.post('/refresh', asyncHandler(async (req, res) => {
+  const prisma = getPrisma();
   const refreshToken = req.cookies.refreshToken;
 
   if (!refreshToken) {
@@ -170,6 +173,7 @@ router.post('/refresh', asyncHandler(async (req, res) => {
 }));
 
 router.post('/logout', asyncHandler(async (req, res) => {
+  const prisma = getPrisma();
   const refreshToken = req.cookies.refreshToken;
 
   if (refreshToken) {
@@ -180,7 +184,12 @@ router.post('/logout', asyncHandler(async (req, res) => {
       data: { revokedAt: new Date() },
     });
 
-    res.clearCookie('refreshToken');
+    res.cookie('refreshToken', '', {
+      httpOnly: true,
+      secure: config.server.cookieSecure,
+      sameSite: 'lax',
+      maxAge: 0,
+    });
   }
 
   req.log?.info('User logged out');
@@ -189,6 +198,7 @@ router.post('/logout', asyncHandler(async (req, res) => {
 }));
 
 router.get('/me', requireAuth, asyncHandler(async (req: Request, res) => {
+  const prisma = getPrisma();
   const user = await prisma.user.findUnique({
     where: { id: req.userId },
     select: {

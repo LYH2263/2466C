@@ -1,6 +1,6 @@
 import { Router, Request } from 'express';
 import { z } from 'zod';
-import { prisma } from '../index.js';
+import { getPrisma } from '../prisma.js';
 import { requireAuth } from '../middleware/auth.js';
 import { asyncHandler } from '../middleware/errorHandler.js';
 import { NotFoundError } from '../errors.js';
@@ -20,6 +20,7 @@ const assetSchema = z.object({
 });
 
 router.get('/', requireAuth, asyncHandler(async (req: Request, res) => {
+  const prisma = getPrisma();
   const records = await prisma.assetRecord.findMany({
     where: { userId: req.userId },
     orderBy: { date: 'desc' },
@@ -29,6 +30,7 @@ router.get('/', requireAuth, asyncHandler(async (req: Request, res) => {
 }));
 
 router.post('/', requireAuth, asyncHandler(async (req: Request, res) => {
+  const prisma = getPrisma();
   const data = assetSchema.parse(req.body);
 
   const total = data.cash + data.longTermInvest + data.stableBond;
@@ -54,6 +56,7 @@ router.post('/', requireAuth, asyncHandler(async (req: Request, res) => {
 }));
 
 router.delete('/:id', requireAuth, asyncHandler(async (req: Request, res) => {
+  const prisma = getPrisma();
   const { id } = req.params;
 
   const record = await prisma.assetRecord.findFirst({

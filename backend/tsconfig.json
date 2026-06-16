@@ -14,6 +14,6 @@
     "declarationMap": true,
     "sourceMap": true
   },
-  "include": ["src/**/*", "prisma/seed.ts"],
-  "exclude": ["node_modules", "dist"]
+  "include": ["src/**/*", "prisma/seed.ts", "tests/**/*"],
+  "exclude": ["node_modules", "dist", "tests/generated"]
 }
