@@ -31,6 +31,9 @@ pnpm-debug.log*
 # ===== Prisma =====
 backend/prisma/*.db
 backend/prisma/*.db-journal
+backend/prisma/tests/*.db
+backend/prisma/tests/*.db-journal
+backend/tests/generated/
 
 # ===== 编辑器 / 系统文件 =====
 .DS_Store
