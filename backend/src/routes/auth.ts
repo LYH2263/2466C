@@ -1,15 +1,12 @@
-import { Router } from 'express';
+import { Router, Request } from 'express';
 import bcrypt from 'bcrypt';
-import jwt from 'jsonwebtoken';
 import { z } from 'zod';
 import { prisma } from '../index.js';
 import crypto from 'crypto';
+import { requireAuth, generateAccessToken } from '../middleware/auth.js';
+import { config } from '../config.js';
 
 const router = Router();
-
-const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
-const ACCESS_TOKEN_EXPIRES = '15m';
-const REFRESH_TOKEN_EXPIRES_DAYS = 7;
 
 // Validation schemas
 const loginSchema = z.object({
@@ -23,10 +20,6 @@ const registerSchema = z.object({
 });
 
 // Generate tokens
-function generateAccessToken(userId: string) {
-  return jwt.sign({ userId }, JWT_SECRET, { expiresIn: ACCESS_TOKEN_EXPIRES });
-}
-
 function generateRefreshToken() {
   return crypto.randomBytes(40).toString('hex');
 }
@@ -144,16 +137,16 @@ router.post('/login', async (req, res) => {
       data: {
         userId: user.id,
         tokenHash: refreshTokenHash,
-        expiresAt: new Date(Date.now() + REFRESH_TOKEN_EXPIRES_DAYS * 24 * 60 * 60 * 1000)
+        expiresAt: new Date(Date.now() + config.jwt.refreshTokenExpiresDays * 24 * 60 * 60 * 1000)
       }
     });
 
     // Set refresh token cookie
     res.cookie('refreshToken', refreshToken, {
       httpOnly: true,
-      secure: process.env.COOKIE_SECURE === 'true',
+      secure: config.server.cookieSecure,
       sameSite: 'lax',
-      maxAge: REFRESH_TOKEN_EXPIRES_DAYS * 24 * 60 * 60 * 1000
+      maxAge: config.jwt.refreshTokenExpiresDays * 24 * 60 * 60 * 1000
     });
 
     res.json({
@@ -233,37 +226,23 @@ router.post('/logout', async (req, res) => {
 });
 
 // Get current user
-router.get('/me', async (req, res) => {
+router.get('/me', requireAuth, async (req: Request, res) => {
   try {
-    const authHeader = req.headers.authorization;
-    
-    if (!authHeader?.startsWith('Bearer ')) {
-      return res.status(401).json({ error: '未提供访问令牌' });
-    }
-
-    const token = authHeader.substring(7);
-    
-    try {
-      const decoded = jwt.verify(token, JWT_SECRET) as { userId: string };
-      
-      const user = await prisma.user.findUnique({
-        where: { id: decoded.userId },
-        select: {
-          id: true,
-          email: true,
-          role: true,
-          createdAt: true
-        }
-      });
-
-      if (!user) {
-        return res.status(401).json({ error: '用户不存在' });
+    const user = await prisma.user.findUnique({
+      where: { id: req.userId },
+      select: {
+        id: true,
+        email: true,
+        role: true,
+        createdAt: true
       }
+    });
 
-      res.json({ user });
-    } catch (jwtError) {
-      return res.status(401).json({ error: '访问令牌无效或已过期' });
+    if (!user) {
+      return res.status(401).json({ error: '用户不存在' });
     }
+
+    res.json({ user });
   } catch (error) {
     console.error('Get user error:', error);
     res.status(500).json({ error: '获取用户信息失败' });

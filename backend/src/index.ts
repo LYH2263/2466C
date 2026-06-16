@@ -7,10 +7,11 @@ import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcrypt';
 import authRoutes from './routes/auth.js';
 import assetRoutes from './routes/assets.js';
+import { config } from './config.js';
 
 const app = express();
 const prisma = new PrismaClient();
-const PORT = process.env.PORT || 8000;
+const PORT = config.server.port;
 
 // Trust proxy (behind nginx)
 app.set('trust proxy', 1);

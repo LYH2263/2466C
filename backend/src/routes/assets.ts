@@ -1,10 +1,9 @@
-import { Router } from 'express';
+import { Router, Request } from 'express';
 import { z } from 'zod';
 import { prisma } from '../index.js';
-import jwt from 'jsonwebtoken';
+import { requireAuth } from '../middleware/auth.js';
 
 const router = Router();
-const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
 
 // Validation schema
 const assetSchema = z.object({
@@ -19,27 +18,8 @@ const assetSchema = z.object({
   message: '至少输入一项资产金额'
 });
 
-// Auth middleware
-function authMiddleware(req: any, res: any, next: any) {
-  const authHeader = req.headers.authorization;
-  
-  if (!authHeader?.startsWith('Bearer ')) {
-    return res.status(401).json({ error: '未提供访问令牌' });
-  }
-
-  const token = authHeader.substring(7);
-  
-  try {
-    const decoded = jwt.verify(token, JWT_SECRET) as { userId: string };
-    req.userId = decoded.userId;
-    next();
-  } catch (error) {
-    return res.status(401).json({ error: '访问令牌无效或已过期' });
-  }
-}
-
 // Get all assets for current user
-router.get('/', authMiddleware, async (req: any, res) => {
+router.get('/', requireAuth, async (req: Request, res) => {
   try {
     const records = await prisma.assetRecord.findMany({
       where: { userId: req.userId },
@@ -54,7 +34,7 @@ router.get('/', authMiddleware, async (req: any, res) => {
 });
 
 // Create new asset record
-router.post('/', authMiddleware, async (req: any, res) => {
+router.post('/', requireAuth, async (req: Request, res) => {
   try {
     const data = assetSchema.parse(req.body);
     
@@ -86,7 +66,7 @@ router.post('/', authMiddleware, async (req: any, res) => {
 });
 
 // Delete asset record
-router.delete('/:id', authMiddleware, async (req: any, res) => {
+router.delete('/:id', requireAuth, async (req: Request, res) => {
   try {
     const { id } = req.params;
 
