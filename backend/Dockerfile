@@ -13,6 +13,7 @@ RUN ./node_modules/.bin/prisma generate
 
 COPY . .
 RUN npm run build
+RUN npm prune --production && npm install prisma@^5.7.0 --no-save
 
 FROM node:20-slim
 
@@ -21,13 +22,10 @@ WORKDIR /app
 # Install OpenSSL for Prisma runtime
 RUN apt-get update -y && apt-get install -y openssl
 
-# Copy package files
 COPY --from=builder /app/package*.json ./
+COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/prisma ./prisma
-
-# Install production dependencies (to fix bcrypt architecture mismatch)
-RUN npm ci --production && ./node_modules/.bin/prisma generate
 
 ENV NODE_ENV=production
 
